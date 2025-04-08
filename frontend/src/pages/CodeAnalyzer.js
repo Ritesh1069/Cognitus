@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -20,17 +20,27 @@ import {
   ListItemText,
   ListItemIcon,
   Chip,
+  AppBar,
+  Toolbar,
+  IconButton,
 } from '@mui/material';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import StyleIcon from '@mui/icons-material/Style';
-import SpeedIcon from '@mui/icons-material/Speed';
-import SecurityIcon from '@mui/icons-material/Security';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import axios from 'axios';
-import CodeIcon from '@mui/icons-material/Code';
-import AnalyticsIcon from '@mui/icons-material/Analytics';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThreeDBackground from '../components/ThreeDBackground';
+import CodeAssistant from '../components/CodeAssistant';
+import ContextReview from '../components/ContextReview';
+import CodeDashboard from '../components/CodeDashboard';
+import {
+  BugReport as BugReportIcon,
+  Style as StyleIcon,
+  Speed as SpeedIcon,
+  Security as SecurityIcon,
+  Home as HomeIcon,
+  Code as CodeIcon,
+  Analytics as AnalyticsIcon,
+  Lightbulb as LightbulbIcon,
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -421,10 +431,9 @@ function AnalysisResult({ result, type }) {
 }
 
 function CodeAnalyzer() {
+  const navigate = useNavigate();
   const [code, setCode] = useState('');
-  const [language, setLanguage] = useState('');
-  const [teamConventions, setTeamConventions] = useState('');
-  const [context, setContext] = useState('');
+  const [language, setLanguage] = useState('javascript');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState({
     bug: null,
@@ -433,18 +442,34 @@ function CodeAnalyzer() {
     security: null,
   });
   const [activeTab, setActiveTab] = useState(0);
+  const [projectContext, setProjectContext] = useState('');
+  const [analysis, setAnalysis] = useState(null);
 
-  const handleAnalyze = async (type) => {
+  const handleAnalyze = async () => {
+    if (!code.trim()) return;
+    
     setLoading(true);
     try {
-      const response = await axios.post(`http://localhost:5000/analyze/${type}`, {
-        code,
-        language,
-        ...(type === 'style' && { team_conventions: teamConventions }),
-        ...(type === 'performance' && { context }),
+      // Run all analyses in parallel
+      const analysisTypes = ['bug', 'style', 'performance', 'security'];
+      const responses = await Promise.all(
+        analysisTypes.map(type => 
+          axios.post(`http://localhost:5000/analyze/${type}`, {
+            code,
+            language,
+          })
+        )
+      );
+
+      // Update results with all responses
+      const newResults = {};
+      analysisTypes.forEach((type, index) => {
+        newResults[type] = responses[index].data.result;
       });
-      setResults((prev) => ({ ...prev, [type]: response.data.result }));
-      setActiveTab(['bug', 'style', 'performance', 'security'].indexOf(type));
+      setResults(newResults);
+      
+      // Show the first tab with results
+      setActiveTab(0);
     } catch (error) {
       console.error('Analysis error:', error);
     }
@@ -463,25 +488,89 @@ function CodeAnalyzer() {
     'PHP',
   ];
 
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
   return (
-    <Box sx={{ 
-      position: 'relative',
-      minHeight: '100vh',
-      overflow: 'hidden',
-    }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
       <ThreeDBackground />
       
+      {/* Navigation Bar */}
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          background: 'rgba(26, 32, 44, 0.8)',
+          backdropFilter: 'blur(10px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        }}
+      >
+        <Toolbar>
+          <IconButton
+            edge="start"
+            color="inherit"
+            onClick={() => navigate('/')}
+            sx={{
+              mr: 2,
+              '&:hover': {
+                transform: 'scale(1.1)',
+                transition: 'transform 0.2s',
+              },
+            }}
+          >
+            <HomeIcon />
+          </IconButton>
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              flexGrow: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              color: '#fff',
+            }}
+          >
+            <CodeIcon />
+            Cognitia
+          </Typography>
+          <IconButton
+            color="inherit"
+            onClick={() => navigate('/analyze')}
+            sx={{
+              mx: 1,
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                transform: 'scale(1.1)',
+                transition: 'transform 0.2s',
+              },
+            }}
+          >
+            <AnalyticsIcon />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+
+      {/* Main Content */}
       <Box
         component={motion.div}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        sx={{ 
-          maxWidth: '1800px', 
-          margin: '0 auto', 
-          p: 2,
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        sx={{
           position: 'relative',
           zIndex: 1,
+          p: 3,
+          mt: 8, // Add margin top to account for the fixed AppBar
         }}
       >
         <Typography 
@@ -549,55 +638,44 @@ function CodeAnalyzer() {
                 <CodeIcon sx={{ fontSize: 24 }} />
                 Input Code
               </Typography>
-              <TextField
-                fullWidth
-                multiline
-                rows={15}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Paste your code here..."
-                variant="outlined"
-                sx={{ 
-                  mb: 2,
-                  '& .MuiOutlinedInput-root': {
-                    fontFamily: 'monospace',
-                    fontSize: '14px',
-                    transition: 'all 0.3s ease',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    color: '#fff',
-                    '& fieldset': {
-                      borderColor: 'rgba(255, 255, 255, 0.1)',
-                    },
-                    '&:hover': {
-                      '& fieldset': {
-                        borderColor: '#2196F3',
-                      }
-                    },
-                    '&.Mui-focused': {
-                      '& fieldset': {
-                        borderColor: '#2196F3',
-                        borderWidth: 2,
-                      }
-                    }
-                  },
-                  '& .MuiInputBase-input': {
-                    color: '#fff',
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: 'rgba(255, 255, 255, 0.7)',
-                  }
-                }}
-              />
-              
               <Stack spacing={2}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={10}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Enter your code here..."
+                  variant="outlined"
+                  label="Code"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#fff',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '& fieldset': {
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                      '&:hover': {
+                        '& fieldset': {
+                          borderColor: '#2196F3',
+                        }
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    }
+                  }}
+                />
+
                 <FormControl fullWidth>
-                  <InputLabel sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>Programming Language</InputLabel>
+                  <InputLabel sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>Language</InputLabel>
                   <Select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    label="Programming Language"
+                    label="Language"
                     sx={{
                       color: '#fff',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
                       '& .MuiOutlinedInput-notchedOutline': {
                         borderColor: 'rgba(255, 255, 255, 0.1)',
                       },
@@ -606,160 +684,44 @@ function CodeAnalyzer() {
                           borderColor: '#2196F3',
                         }
                       },
-                      '& .MuiSelect-icon': {
+                      '& .MuiSvgIcon-root': {
                         color: 'rgba(255, 255, 255, 0.7)',
                       }
                     }}
                   >
                     {languages.map((lang) => (
-                      <MenuItem 
-                        key={lang} 
-                        value={lang}
-                        sx={{
-                          color: '#fff',
-                          backgroundColor: 'rgba(26, 32, 44, 0.7)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(33, 150, 243, 0.2)',
-                          }
-                        }}
-                      >
+                      <MenuItem key={lang} value={lang.toLowerCase()}>
                         {lang}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
 
-                <TextField
-                  fullWidth
-                  value={teamConventions}
-                  onChange={(e) => setTeamConventions(e.target.value)}
-                  placeholder="Team conventions (optional)"
-                  variant="outlined"
-                  label="Team Conventions"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      color: '#fff',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      '& fieldset': {
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                      '&:hover': {
-                        '& fieldset': {
-                          borderColor: '#2196F3',
-                        }
-                      }
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: 'rgba(255, 255, 255, 0.7)',
-                    }
-                  }}
-                />
-
-                <TextField
-                  fullWidth
-                  value={context}
-                  onChange={(e) => setContext(e.target.value)}
-                  placeholder="Additional context (optional)"
-                  variant="outlined"
-                  label="Additional Context"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      color: '#fff',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      '& fieldset': {
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                      '&:hover': {
-                        '& fieldset': {
-                          borderColor: '#2196F3',
-                        }
-                      }
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: 'rgba(255, 255, 255, 0.7)',
-                    }
-                  }}
-                />
-              </Stack>
-
-              <Box sx={{ 
-                mt: 2, 
-                display: 'flex', 
-                gap: 1, 
-                flexWrap: 'wrap',
-                '& .MuiButton-root': {
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-                  }
-                }
-              }}>
                 <Button
                   variant="contained"
-                  onClick={() => handleAnalyze('bug')}
-                  disabled={loading || !code}
-                  startIcon={<BugReportIcon />}
-                  sx={{ 
-                    flex: '1 1 auto', 
-                    minWidth: '120px',
-                    background: 'linear-gradient(45deg, #ff4d4d 30%, #ff7676 90%)',
-                    '&:hover': {
-                      background: 'linear-gradient(45deg, #ff3333 30%, #ff6666 90%)',
-                    }
-                  }}
-                >
-                  Bugs
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => handleAnalyze('style')}
-                  disabled={loading || !code}
-                  startIcon={<StyleIcon />}
-                  sx={{ 
-                    flex: '1 1 auto', 
-                    minWidth: '120px',
+                  onClick={handleAnalyze}
+                  disabled={loading || !code.trim()}
+                  sx={{
+                    py: 1.5,
                     background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                    boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
                     '&:hover': {
                       background: 'linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)',
+                      transform: 'translateY(-2px)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      color: 'rgba(255, 255, 255, 0.3)',
                     }
                   }}
                 >
-                  Style
+                  {loading ? (
+                    <CircularProgress size={24} sx={{ color: '#fff' }} />
+                  ) : (
+                    'Analyze Code'
+                  )}
                 </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => handleAnalyze('performance')}
-                  disabled={loading || !code}
-                  startIcon={<SpeedIcon />}
-                  sx={{ 
-                    flex: '1 1 auto', 
-                    minWidth: '120px',
-                    background: 'linear-gradient(45deg, #ffb74d 30%, #ffcc80 90%)',
-                    '&:hover': {
-                      background: 'linear-gradient(45deg, #ffa726 30%, #ffb74d 90%)',
-                    }
-                  }}
-                >
-                  Performance
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => handleAnalyze('security')}
-                  disabled={loading || !code}
-                  startIcon={<SecurityIcon />}
-                  sx={{ 
-                    flex: '1 1 auto', 
-                    minWidth: '120px',
-                    background: 'linear-gradient(45deg, #ff4d4d 30%, #ff7676 90%)',
-                    '&:hover': {
-                      background: 'linear-gradient(45deg, #ff3333 30%, #ff6666 90%)',
-                    }
-                  }}
-                >
-                  Security
-                </Button>
-              </Box>
+              </Stack>
             </Paper>
           </Grid>
 
@@ -853,7 +815,7 @@ function CodeAnalyzer() {
                   <>
                     <Tabs
                       value={activeTab}
-                      onChange={(e, newValue) => setActiveTab(newValue)}
+                      onChange={handleTabChange}
                       variant="fullWidth"
                       sx={{ 
                         borderBottom: 1, 

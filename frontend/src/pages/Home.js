@@ -1,156 +1,99 @@
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  Container, 
-  Grid, 
-  Paper,
-  useTheme,
-  useMediaQuery
-} from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import CodeIcon from '@mui/icons-material/Code';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import StyleIcon from '@mui/icons-material/Style';
-import SpeedIcon from '@mui/icons-material/Speed';
-import SecurityIcon from '@mui/icons-material/Security';
-import { motion } from 'framer-motion';
+import {
+  Box,
+  Typography,
+  Button,
+} from '@mui/material';
 import ThreeDBackground from '../components/ThreeDBackground';
+import { motion } from 'framer-motion';
 
 function Home() {
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const features = [
-    {
-      icon: <BugReportIcon sx={{ fontSize: 40, color: '#fff' }} />,
-      title: 'Bug Detection',
-      description: 'Identify potential bugs and errors in your code',
-      color: '#ff4d4d'
-    },
-    {
-      icon: <StyleIcon sx={{ fontSize: 40, color: '#fff' }} />,
-      title: 'Code Style',
-      description: 'Ensure consistent coding style and best practices',
-      color: '#2196F3'
-    },
-    {
-      icon: <SpeedIcon sx={{ fontSize: 40, color: '#fff' }} />,
-      title: 'Performance',
-      description: 'Optimize your code for better performance',
-      color: '#ffb74d'
-    },
-    {
-      icon: <SecurityIcon sx={{ fontSize: 40, color: '#fff' }} />,
-      title: 'Security',
-      description: 'Detect security vulnerabilities in your code',
-      color: '#ff4d4d'
-    }
-  ];
 
   return (
-    <Box sx={{ 
-      position: 'relative',
-      minHeight: '100vh',
-      overflow: 'hidden',
-    }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
       <ThreeDBackground />
       
-      <Container maxWidth="lg">
-        <Box
-          component={motion.div}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1 }}
+      <Box
+        component={motion.div}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        sx={{
+          position: 'relative',
+          zIndex: 1,
+          p: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+        }}
+      >
+        <Typography
+          variant="h3"
+          component={motion.h1}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
           sx={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            position: 'relative',
-            zIndex: 1,
+            mb: 2,
+            background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textShadow: '0 0 20px rgba(33, 150, 243, 0.3)',
+            fontWeight: 'bold',
+            textAlign: 'center',
           }}
         >
-          <Typography
-            component={motion.h1}
-            initial={{ opacity: 0, y: -50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            variant="h2"
-            sx={{
-              mb: 4,
-              textAlign: 'center',
-              color: '#fff',
-              fontWeight: 'bold',
-              background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              textShadow: '0 0 20px rgba(33, 150, 243, 0.3)',
-            }}
-          >
-            Welcome to Code Analyzer
-          </Typography>
-
-          <Typography
-            component={motion.p}
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            variant="h5"
-            sx={{
-              mb: 6,
-              textAlign: 'center',
-              color: 'rgba(255, 255, 255, 0.8)',
-              maxWidth: '800px',
-            }}
-          >
-            Analyze your code for bugs, style issues, performance problems, and security vulnerabilities
-            with our advanced AI-powered analysis tool.
-          </Typography>
-
-          <Box
-            component={motion.div}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-            sx={{
-              display: 'flex',
-              gap: 3,
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-            }}
-          >
-            <Button
-              component={motion.button}
-              whileHover={{ scale: 1.05, rotateX: 5, rotateY: 5 }}
-              whileTap={{ scale: 0.95 }}
-              variant="contained"
-              size="large"
-              startIcon={<CodeIcon />}
-              onClick={() => navigate('/analyze')}
-              sx={{
-                background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                color: 'white',
-                padding: '12px 32px',
-                fontSize: '1.2rem',
-                borderRadius: '12px',
-                boxShadow: '0 8px 32px rgba(33, 150, 243, 0.3)',
-                transformStyle: 'preserve-3d',
-                perspective: '1000px',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)',
-                  boxShadow: '0 12px 40px rgba(33, 150, 243, 0.4)',
-                }
-              }}
-            >
-              Start Analyzing
-            </Button>
-          </Box>
-        </Box>
-      </Container>
+          Welcome to Cognitia AI
+        </Typography>
+        <Typography
+          variant="h6"
+          component={motion.p}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+          sx={{
+            color: 'rgba(255, 255, 255, 0.7)',
+            mb: 4,
+            textAlign: 'center',
+            maxWidth: '600px',
+          }}
+        >
+          Analyze your code with AI-powered tools for bugs, style, performance, and security.
+        </Typography>
+        <Button
+          component={motion.button}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          variant="contained"
+          size="large"
+          onClick={() => navigate('/analyze')}
+          sx={{
+            py: 1.5,
+            px: 4,
+            fontSize: '1.1rem',
+            background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+            boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
+            '&:hover': {
+              background: 'linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)',
+              transform: 'translateY(-2px)',
+            },
+          }}
+        >
+          Start Analyzing
+        </Button>
+      </Box>
     </Box>
   );
 }

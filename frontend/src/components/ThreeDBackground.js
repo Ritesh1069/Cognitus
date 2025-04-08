@@ -1,13 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { motion } from 'framer-motion';
 
 const ThreeDBackground = () => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
   const particlesRef = useRef(null);
-  const mouseRef = useRef({ x: 0, y: 0 });
+  const animationFrameRef = useRef(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -15,16 +14,21 @@ const ThreeDBackground = () => {
     // Scene setup
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    
+    scene.background = new THREE.Color(0x0a0a1a); // Darker background color
+
+    // Camera setup
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    camera.position.z = 5;
+
+    // Renderer setup
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     rendererRef.current = renderer;
-    
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x0a0a1a, 1); // Darker background color
     mountRef.current.appendChild(renderer.domElement);
 
-    // Create particles
-    const particleCount = 200;
+    // Particle system
+    const particleCount = 2000;
     const particles = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
@@ -34,9 +38,10 @@ const ThreeDBackground = () => {
       positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
       positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
 
-      colors[i * 3] = 0.1 + Math.random() * 0.1;
-      colors[i * 3 + 1] = 0.2 + Math.random() * 0.1;
-      colors[i * 3 + 2] = 0.3 + Math.random() * 0.1;
+      // Darker particle colors
+      colors[i * 3] = 0.1 + Math.random() * 0.1; // Darker red
+      colors[i * 3 + 1] = 0.1 + Math.random() * 0.1; // Darker green
+      colors[i * 3 + 2] = 0.2 + Math.random() * 0.2; // Darker blue
     }
 
     particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -46,105 +51,66 @@ const ThreeDBackground = () => {
       size: 0.05,
       vertexColors: true,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
     });
 
     const particleSystem = new THREE.Points(particles, particleMaterial);
-    scene.add(particleSystem);
     particlesRef.current = particleSystem;
+    scene.add(particleSystem);
 
-    // Camera position
-    camera.position.z = 5;
-
-    // Mouse movement handler
+    // Mouse movement effect
     const handleMouseMove = (event) => {
-      mouseRef.current = {
-        x: (event.clientX / window.innerWidth) * 2 - 1,
-        y: -(event.clientY / window.innerHeight) * 2 + 1,
-      };
+      const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+      
+      if (particlesRef.current) {
+        particlesRef.current.rotation.x = mouseY * 0.1;
+        particlesRef.current.rotation.y = mouseX * 0.1;
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
 
     // Animation loop
-    let animationFrameId;
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-
+      animationFrameRef.current = requestAnimationFrame(animate);
+      
       if (particlesRef.current) {
-        // Rotate particles
-        particlesRef.current.rotation.x += 0.0005;
-        particlesRef.current.rotation.y += 0.0005;
-
-        // Move particles based on mouse position
-        const positions = particlesRef.current.geometry.attributes.position.array;
-        for (let i = 0; i < positions.length; i += 3) {
-          positions[i] += mouseRef.current.x * 0.0001;
-          positions[i + 1] += mouseRef.current.y * 0.0001;
-        }
-        particlesRef.current.geometry.attributes.position.needsUpdate = true;
+        particlesRef.current.rotation.y += 0.001;
       }
-
+      
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // Handle window resize
-    const handleResize = () => {
-      if (!renderer || !camera) return;
-      
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    // Cleanup
+    // Cleanup function
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameRef.current);
       
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-
       if (mountRef.current && rendererRef.current) {
         mountRef.current.removeChild(rendererRef.current.domElement);
       }
-
-      if (sceneRef.current && particlesRef.current) {
-        sceneRef.current.remove(particlesRef.current);
+      
+      if (sceneRef.current) {
+        sceneRef.current.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.geometry.dispose();
+            if (object.material.map) object.material.map.dispose();
+            object.material.dispose();
+          }
+        });
       }
-
-      if (particlesRef.current) {
-        particlesRef.current.geometry.dispose();
-        particlesRef.current.material.dispose();
-      }
-
+      
       if (rendererRef.current) {
         rendererRef.current.dispose();
       }
     };
   }, []);
 
-  return (
-    <motion.div
-      ref={mountRef}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: -1,
-      }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 1 }}
-    />
-  );
+  return <div ref={mountRef} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }} />;
 };
 
 export default ThreeDBackground; 
