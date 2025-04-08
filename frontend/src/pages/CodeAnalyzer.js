@@ -23,7 +23,9 @@ import {
   AppBar,
   Toolbar,
   IconButton,
+  Divider,
 } from '@mui/material';
+import { TreeView, TreeItem } from '@mui/x-tree-view';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThreeDBackground from '../components/ThreeDBackground';
 import CodeAssistant from '../components/CodeAssistant';
@@ -38,6 +40,10 @@ import {
   Code as CodeIcon,
   Analytics as AnalyticsIcon,
   Lightbulb as LightbulbIcon,
+  Folder as FolderIcon,
+  InsertDriveFile as FileIcon,
+  ChevronRight as ChevronRightIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -77,9 +83,9 @@ function TabPanel({ children, value, index }) {
     >
       {value === index && (
         <Box sx={{ p: 2 }}>
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="popLayout">
             <motion.div
-              key={index}
+              key={`tab-${index}`}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -430,8 +436,93 @@ function AnalysisResult({ result, type }) {
   );
 }
 
+function FileExplorer({ files, onFileSelect, selectedFile }) {
+  const renderTree = (nodes) => {
+    if (nodes.type === 'file') {
+      return (
+        <TreeItem
+          key={nodes.path}
+          itemId={nodes.path}
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileIcon sx={{ fontSize: 16 }} />
+              <Typography variant="body2">{nodes.name}</Typography>
+            </Box>
+          }
+          onClick={() => onFileSelect(nodes)}
+          sx={{
+            '& .MuiTreeItem-content': {
+              padding: '4px 8px',
+              borderRadius: '4px',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              },
+              '&.Mui-selected': {
+                backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                '&:hover': {
+                  backgroundColor: 'rgba(33, 150, 243, 0.15)',
+                },
+              },
+            },
+          }}
+        />
+      );
+    }
+
+    return (
+      <TreeItem
+        key={nodes.path}
+        itemId={nodes.path}
+        label={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FolderIcon sx={{ fontSize: 16 }} />
+            <Typography variant="body2">{nodes.name}</Typography>
+          </Box>
+        }
+      >
+        {Array.isArray(nodes.children) ? nodes.children.map((node) => renderTree(node)) : null}
+      </TreeItem>
+    );
+  };
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2,
+        height: '100%',
+        background: 'rgba(26, 32, 44, 0.7)',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '12px',
+      }}
+    >
+      <Typography variant="h6" sx={{ mb: 2, color: '#fff' }}>
+        Files
+      </Typography>
+      <TreeView
+        aria-label="file system navigator"
+        sx={{
+          height: '100%',
+          flexGrow: 1,
+          maxWidth: 400,
+          overflowY: 'auto',
+          color: '#fff',
+          '& .MuiTreeItem-content': {
+            color: 'rgba(255, 255, 255, 0.7)',
+          },
+        }}
+      >
+        {files.map((file) => renderTree(file))}
+      </TreeView>
+    </Paper>
+  );
+}
+
 function CodeAnalyzer() {
   const navigate = useNavigate();
+  const [files, setFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
   const [loading, setLoading] = useState(false);
@@ -442,33 +533,93 @@ function CodeAnalyzer() {
     security: null,
   });
   const [activeTab, setActiveTab] = useState(0);
-  const [projectContext, setProjectContext] = useState('');
-  const [analysis, setAnalysis] = useState(null);
+
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+    setCode(file.content || '');
+    setLanguage(file.language || 'javascript');
+  };
+
+  const handleFileUpload = (event) => {
+    const fileList = event.target.files;
+    const newFiles = [];
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const content = e.target.result;
+        const filePath = file.webkitRelativePath || file.name;
+        const pathParts = filePath.split('/');
+        
+        let currentLevel = newFiles;
+        for (let j = 0; j < pathParts.length - 1; j++) {
+          const part = pathParts[j];
+          let folder = currentLevel.find(item => item.name === part && item.type === 'directory');
+          
+          if (!folder) {
+            folder = {
+              name: part,
+              path: pathParts.slice(0, j + 1).join('/'),
+              type: 'directory',
+              children: []
+            };
+            currentLevel.push(folder);
+          }
+          currentLevel = folder.children;
+        }
+
+        const fileName = pathParts[pathParts.length - 1];
+        const extension = fileName.split('.').pop().toLowerCase();
+        const languageMap = {
+          'js': 'javascript',
+          'ts': 'typescript',
+          'py': 'python',
+          'java': 'java',
+          'cpp': 'c++',
+          'cs': 'c#',
+          'go': 'go',
+          'rb': 'ruby',
+          'php': 'php'
+        };
+
+        const newFile = {
+          name: fileName,
+          path: filePath,
+          type: 'file',
+          content: content,
+          language: languageMap[extension] || 'javascript'
+        };
+
+        currentLevel.push(newFile);
+        setFiles([...newFiles]);
+      };
+
+      reader.readAsText(file);
+    }
+  };
 
   const handleAnalyze = async () => {
-    if (!code.trim()) return;
+    if (!selectedFile) return;
     
     setLoading(true);
     try {
-      // Run all analyses in parallel
       const analysisTypes = ['bug', 'style', 'performance', 'security'];
       const responses = await Promise.all(
         analysisTypes.map(type => 
           axios.post(`http://localhost:5000/analyze/${type}`, {
-            code,
-            language,
+            code: selectedFile.content,
+            language: selectedFile.language,
           })
         )
       );
 
-      // Update results with all responses
       const newResults = {};
       analysisTypes.forEach((type, index) => {
         newResults[type] = responses[index].data.result;
       });
       setResults(newResults);
-      
-      // Show the first tab with results
       setActiveTab(0);
     } catch (error) {
       console.error('Analysis error:', error);
@@ -511,6 +662,7 @@ function CodeAnalyzer() {
           background: 'rgba(26, 32, 44, 0.8)',
           backdropFilter: 'blur(10px)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          zIndex: 1200,
         }}
       >
         <Toolbar>
@@ -568,9 +720,12 @@ function CodeAnalyzer() {
         transition={{ duration: 0.5 }}
         sx={{
           position: 'relative',
-          zIndex: 1,
+          zIndex: 2,
           p: 3,
-          mt: 8, // Add margin top to account for the fixed AppBar
+          mt: 8,
+          minHeight: 'calc(100vh - 64px)', // Subtract AppBar height
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <Typography 
@@ -594,360 +749,212 @@ function CodeAnalyzer() {
           Code Analysis
         </Typography>
 
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={5}>
-            <Paper 
-              component={motion.div}
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              sx={{ 
-                p: 2, 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                background: 'rgba(26, 32, 44, 0.7)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-                transformStyle: 'preserve-3d',
-                perspective: '1000px',
-                '&:hover': {
-                  transform: 'translateY(-4px) rotateX(2deg) rotateY(2deg)',
-                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                }
-              }}
-            >
-              <Typography 
-                variant="h6" 
-                gutterBottom 
-                sx={{ 
-                  mb: 2,
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  '&:hover': {
-                    color: '#2196F3',
-                    transform: 'translateX(4px)',
-                    transition: 'all 0.3s ease'
-                  }
-                }}
-              >
-                <CodeIcon sx={{ fontSize: 24 }} />
-                Input Code
-              </Typography>
-              <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={10}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="Enter your code here..."
-                  variant="outlined"
-                  label="Code"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      color: '#fff',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      '& fieldset': {
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                      '&:hover': {
-                        '& fieldset': {
-                          borderColor: '#2196F3',
-                        }
-                      }
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: 'rgba(255, 255, 255, 0.7)',
-                    }
-                  }}
-                />
-
-                <FormControl fullWidth>
-                  <InputLabel sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>Language</InputLabel>
-                  <Select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    label="Language"
-                    sx={{
-                      color: '#fff',
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                      '&:hover': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#2196F3',
-                        }
-                      },
-                      '& .MuiSvgIcon-root': {
-                        color: 'rgba(255, 255, 255, 0.7)',
-                      }
-                    }}
-                  >
-                    {languages.map((lang) => (
-                      <MenuItem key={lang} value={lang.toLowerCase()}>
-                        {lang}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <Button
-                  variant="contained"
-                  onClick={handleAnalyze}
-                  disabled={loading || !code.trim()}
-                  sx={{
-                    py: 1.5,
-                    background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                    boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
-                    '&:hover': {
-                      background: 'linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)',
-                      transform: 'translateY(-2px)',
-                    },
-                    '&:disabled': {
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: 'rgba(255, 255, 255, 0.3)',
-                    }
-                  }}
-                >
-                  {loading ? (
-                    <CircularProgress size={24} sx={{ color: '#fff' }} />
-                  ) : (
-                    'Analyze Code'
-                  )}
-                </Button>
-              </Stack>
-            </Paper>
+        <Grid container spacing={3} sx={{ flexGrow: 1, zIndex: 3 }}>
+          <Grid item xs={12} md={3}>
+            <FileExplorer 
+              files={files} 
+              onFileSelect={handleFileSelect} 
+              selectedFile={selectedFile} 
+            />
           </Grid>
 
-          <Grid item xs={12} md={7}>
-            <Paper 
-              component={motion.div}
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              sx={{ 
-                p: 2, 
-                height: '100%', 
-                display: 'flex', 
-                flexDirection: 'column',
-                background: 'rgba(26, 32, 44, 0.7)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-                transformStyle: 'preserve-3d',
-                perspective: '1000px',
-                '&:hover': {
-                  transform: 'translateY(-4px) rotateX(-2deg) rotateY(-2deg)',
-                  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                }
-              }}
-            >
-              <Typography 
-                variant="h6" 
-                gutterBottom 
+          <Grid item xs={12} md={9}>
+            <Stack spacing={3} sx={{ height: '100%' }}>
+              <Paper 
+                component={motion.div}
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
                 sx={{ 
-                  mb: 2,
-                  animation: 'slideIn 0.5s ease-out',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  '&:hover': {
-                    color: '#2196F3',
-                    transform: 'translateX(4px)',
-                    transition: 'all 0.3s ease'
-                  }
+                  p: 2, 
+                  background: 'rgba(26, 32, 44, 0.9)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  position: 'relative',
+                  zIndex: 3,
                 }}
               >
-                <AnalyticsIcon sx={{ fontSize: 24 }} />
-                Analysis Results
-              </Typography>
-              <Box sx={{ 
-                flex: 1,
-                overflow: 'auto',
-                maxHeight: '600px',
-                p: 2,
-                bgcolor: 'rgba(26, 32, 44, 0.5)',
-                borderRadius: 1,
-                animation: 'fadeIn 0.5s ease-in',
-                '& > *': {
-                  mb: 2,
-                },
-                '&::-webkit-scrollbar': {
-                  width: '6px',
-                  height: '6px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'transparent',
-                  borderRadius: '3px',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  borderRadius: '3px',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    background: 'rgba(255, 255, 255, 0.2)',
-                  },
-                },
-              }}>
-                {loading ? (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'center', 
-                    alignItems: 'center',
-                    minHeight: '300px'
-                  }}>
-                    <CircularProgress 
-                      sx={{ 
-                        animation: 'spin 1s linear infinite',
-                        color: '#2196F3'
-                      }} 
+                <Stack spacing={2}>
+                  <Button
+                    variant="contained"
+                    component="label"
+                    sx={{
+                      background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                      boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
+                      '&:hover': {
+                        background: 'linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)',
+                        transform: 'translateY(-2px)',
+                      },
+                    }}
+                  >
+                    Upload Project
+                    <input
+                      type="file"
+                      hidden
+                      webkitdirectory=""
+                      directory=""
+                      onChange={handleFileUpload}
                     />
-                  </Box>
-                ) : (
-                  <>
-                    <Tabs
-                      value={activeTab}
-                      onChange={handleTabChange}
-                      variant="fullWidth"
-                      sx={{ 
-                        borderBottom: 1, 
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                        mb: 2,
-                        '& .MuiTab-root': {
-                          color: 'rgba(255, 255, 255, 0.7)',
-                          transition: 'all 0.3s ease',
-                          '&:hover': {
-                            color: '#2196F3',
-                            transform: 'scale(1.05)',
-                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                          },
-                          '&.Mui-selected': {
-                            color: '#2196F3',
-                            fontWeight: 'bold',
-                          },
-                        },
-                      }}
-                    >
-                      <Tab 
-                        label="Bugs" 
-                        icon={<BugReportIcon />} 
-                        iconPosition="start" 
-                        sx={{
-                          '& .MuiSvgIcon-root': {
-                            color: '#ff4d4d',
-                          },
-                        }}
-                      />
-                      <Tab 
-                        label="Style" 
-                        icon={<StyleIcon />} 
-                        iconPosition="start"
-                        sx={{
-                          '& .MuiSvgIcon-root': {
-                            color: '#2196F3',
-                          },
-                        }}
-                      />
-                      <Tab 
-                        label="Performance" 
-                        icon={<SpeedIcon />} 
-                        iconPosition="start"
-                        sx={{
-                          '& .MuiSvgIcon-root': {
-                            color: '#ffb74d',
-                          },
-                        }}
-                      />
-                      <Tab 
-                        label="Security" 
-                        icon={<SecurityIcon />} 
-                        iconPosition="start"
-                        sx={{
-                          '& .MuiSvgIcon-root': {
-                            color: '#ff4d4d',
-                          },
-                        }}
-                      />
-                    </Tabs>
+                  </Button>
 
-                    <AnimatePresence mode="wait">
-                      <TabPanel value={activeTab} index={0}>
-                        {results.bug ? (
+                  {selectedFile && (
+                    <>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={10}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        placeholder="Enter your code here..."
+                        variant="outlined"
+                        label="Code"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            color: '#fff',
+                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                            '& fieldset': {
+                              borderColor: 'rgba(255, 255, 255, 0.1)',
+                            },
+                            '&:hover': {
+                              '& fieldset': {
+                                borderColor: '#2196F3',
+                              }
+                            }
+                          },
+                          '& .MuiInputLabel-root': {
+                            color: 'rgba(255, 255, 255, 0.7)',
+                          }
+                        }}
+                      />
+
+                      <FormControl fullWidth>
+                        <InputLabel sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>Language</InputLabel>
+                        <Select
+                          value={language}
+                          onChange={(e) => setLanguage(e.target.value)}
+                          label="Language"
+                          sx={{
+                            color: '#fff',
+                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                            '& .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'rgba(255, 255, 255, 0.1)',
+                            },
+                            '&:hover': {
+                              '& .MuiOutlinedInput-notchedOutline': {
+                                borderColor: '#2196F3',
+                              }
+                            },
+                            '& .MuiSvgIcon-root': {
+                              color: 'rgba(255, 255, 255, 0.7)',
+                            }
+                          }}
+                        >
+                          {languages.map((lang) => (
+                            <MenuItem key={lang} value={lang.toLowerCase()}>
+                              {lang}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <Button
+                        variant="contained"
+                        onClick={handleAnalyze}
+                        disabled={loading || !code.trim()}
+                        sx={{
+                          py: 1.5,
+                          background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                          boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)',
+                            transform: 'translateY(-2px)',
+                          },
+                          '&:disabled': {
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            color: 'rgba(255, 255, 255, 0.3)',
+                          }
+                        }}
+                      >
+                        {loading ? (
+                          <CircularProgress size={24} sx={{ color: '#fff' }} />
+                        ) : (
+                          'Analyze Code'
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </Stack>
+              </Paper>
+
+              {Object.values(results).some(result => result !== null) && (
+                <Paper 
+                  component={motion.div}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                  sx={{ 
+                    p: 3, 
+                    background: 'rgba(26, 32, 44, 0.9)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '12px',
+                    mt: 3,
+                    position: 'relative',
+                    zIndex: 3,
+                    maxHeight: 'calc(100vh - 400px)',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <Tabs
+                    value={activeTab}
+                    onChange={handleTabChange}
+                    sx={{
+                      mb: 3,
+                      '& .MuiTabs-indicator': {
+                        backgroundColor: '#2196F3',
+                      },
+                      '& .MuiTab-root': {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        '&.Mui-selected': {
+                          color: '#2196F3',
+                        },
+                      },
+                    }}
+                  >
+                    <Tab label="Bug Detection" />
+                    <Tab label="Style Analysis" />
+                    <Tab label="Performance" />
+                    <Tab label="Security" />
+                  </Tabs>
+
+                  <Box sx={{ position: 'relative', minHeight: 200 }}>
+                    <AnimatePresence mode="popLayout">
+                      <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <TabPanel value={activeTab} index={0}>
                           <AnalysisResult result={results.bug} type="bug" />
-                        ) : (
-                          <Typography 
-                            color="text.secondary" 
-                            sx={{ 
-                              textAlign: 'center', 
-                              py: 4,
-                              animation: 'fadeIn 0.5s ease-in'
-                            }}
-                          >
-                            Run bug analysis to see results
-                          </Typography>
-                        )}
-                      </TabPanel>
-                      <TabPanel value={activeTab} index={1}>
-                        {results.style ? (
+                        </TabPanel>
+                        <TabPanel value={activeTab} index={1}>
                           <AnalysisResult result={results.style} type="style" />
-                        ) : (
-                          <Typography 
-                            color="text.secondary" 
-                            sx={{ 
-                              textAlign: 'center', 
-                              py: 4,
-                              animation: 'fadeIn 0.5s ease-in'
-                            }}
-                          >
-                            Run style analysis to see results
-                          </Typography>
-                        )}
-                      </TabPanel>
-                      <TabPanel value={activeTab} index={2}>
-                        {results.performance ? (
+                        </TabPanel>
+                        <TabPanel value={activeTab} index={2}>
                           <AnalysisResult result={results.performance} type="performance" />
-                        ) : (
-                          <Typography 
-                            color="text.secondary" 
-                            sx={{ 
-                              textAlign: 'center', 
-                              py: 4,
-                              animation: 'fadeIn 0.5s ease-in'
-                            }}
-                          >
-                            Run performance analysis to see results
-                          </Typography>
-                        )}
-                      </TabPanel>
-                      <TabPanel value={activeTab} index={3}>
-                        {results.security ? (
+                        </TabPanel>
+                        <TabPanel value={activeTab} index={3}>
                           <AnalysisResult result={results.security} type="security" />
-                        ) : (
-                          <Typography 
-                            color="text.secondary" 
-                            sx={{ 
-                              textAlign: 'center', 
-                              py: 4,
-                              animation: 'fadeIn 0.5s ease-in'
-                            }}
-                          >
-                            Run security analysis to see results
-                          </Typography>
-                        )}
-                      </TabPanel>
+                        </TabPanel>
+                      </motion.div>
                     </AnimatePresence>
-                  </>
-                )}
-              </Box>
-            </Paper>
+                  </Box>
+                </Paper>
+              )}
+            </Stack>
           </Grid>
         </Grid>
       </Box>
